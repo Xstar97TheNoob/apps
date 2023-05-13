@@ -1,6 +1,6 @@
 # apps
 
-my current truenas scale app across multiple nodes -> [my apps](./my-apps.md).
+my current truenas scale apps across multiple nodes -> [my apps](./my-apps.md).
 
 checkout the n8n [workflow](./truenas_app_list_generator_template.json) and upload it to your local n8n instance.
 
