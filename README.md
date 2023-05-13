@@ -1,6 +1,6 @@
 # apps
 
-my current truenas scale app across multiple nodes.
+my current truenas scale app across multiple nodes -> [my apps](./my-apps.md).
 
 checkout the n8n [workflow](./truenas_app_list_generator_template.json) and upload it to your local n8n instance.
 
@@ -9,6 +9,7 @@ checkout the n8n [workflow](./truenas_app_list_generator_template.json) and uplo
 - add this node [splitinbatches-advanced](https://www.npmjs.com/package/n8n-nodes-splitinbatches-advanced) to your n8n instance to use the workflow
 
 - In scale go to the top right person settings -> api keys or http://truenas.local:81/ui/apikeys and create an api key to authenicate the scale api.
+- Create a repo and add a empty markdown file (and call it whatever you like.) or use the README.md, the choice is yours.
 
 # setup the get-config-data node
 
@@ -18,6 +19,8 @@ the "scale_servers" is an json object array that will support multiple servers.
 
 the "filter_list" is a string array of chart names that will be excluded from the list if you dont want them to be listed in the app-list.md
 for example: ["n8n", "app1", "app2"]
+
+manually run the workflow or activate it to run every 6hrs (change the cron node to whatever you want.)
 
 ```json
 
