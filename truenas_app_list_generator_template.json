@@ -1,0 +1,440 @@
+{
+  "name": "truenas app list generator-template",
+  "nodes": [
+    {
+      "parameters": {
+        "functionCode": "return [\n   {\n     repo: {\n       repo_owner: 'REPO_OWNER', //repo owner\n       repo_name: 'REPO_NAME', //repo name\n       app_list: \"my-apps.md\",// md file\n       commit_msg: \"update app list\", //commit message to update the github file.\n       trains_info:{\n         dependency: {\n            name: \"dependency\", \n            description: \"Contains charts that are mostly used as dependencies.\",\n            emoji: \"🔨\"\n          },\n         enterprise: {\n            name: \"enterprise\", \n            description: \"WIP. Full details to be announced soon.\",\n            emoji: \"👔\"\n          },\n         stable: {\n            name: \"stable\", \n            description: \"Contains most of our charts. These are considered stable and working.\",\n            emoji: \"✅\"\n          },\n         incubator: {\n            name: \"incubator\", \n            description: \"These Charts are still in development and/or are not considered to be of high-enough quality.\",\n            emoji: \"⚠️\"\n          },\n          wip: {\n            name: \"WIP\",\n            description: \"WIP.\",\n            emoji: \"👷\"\n          }\n        },\n      },\n     api: {//scale api\n       base: '/api/v2.0',\n       charts_release: '/chart/release',\n      },\n      scale_servers: [\n        {\n          url: \"\",//http://LOCAL_IP:PORT\n          name: \"\",//server name\n          description: \"\",//server description\n          token: \"\"//CREATE a API Token here -> /ui/apikeys\n        }\n        ],\n        new_badge_emoji: \"🆕\",\n        max_days_new_badge: 3,//max time until first deploy \n        image_size: {width: 48, height: 36}, //set the size width and height for chart images\n        catalogs: [\"truecharts\", \"official\"],//may support other catalogs but api and data may not match.\n        filter_list: [\"\"]//string list of charts to exclude from the list. ex: \"n8n\"\n    }\n]\n"
+      },
+      "name": "get-config-data",
+      "type": "n8n-nodes-base.function",
+      "position": [
+        160,
+        -460
+      ],
+      "typeVersion": 1,
+      "id": "3f5dbaa7-91c6-4ff9-bb50-cba7068791b6"
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {
+          "combine": true
+        }
+      },
+      "id": "6e666bba-f3ac-4699-8fcc-e17d91932a50",
+      "name": "SplitInBatches-Advanced",
+      "type": "n8n-nodes-splitinbatches-advanced.splitInBatchesAdvanced",
+      "typeVersion": 1,
+      "position": [
+        -100,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "scale_servers",
+        "options": {}
+      },
+      "id": "3f166bb0-0d2c-4e0d-9289-a80a8c082d13",
+      "name": "Item Lists",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 1,
+      "position": [
+        320,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "var getConfigData = $node[\"get-config-data\"].json;\n\nvar chunks = items[0].json.chunks;\n\nvar trainsInfo = getConfigData.repo.trains_info;\n\nvar tableFormat= `|Icon|Chart|Train|Description|\\n| :-------------: |:-------------: | :-------------:\t| :-------------\t|`;\n\nvar markDownData = [];\n\nfunction capitalizeFirstLetter(string) {\n  return string.charAt(0).toUpperCase() + string.slice(1);\n}\n\nfunction getTrainInfo(train){\n  let trainInfo = trainsInfo[train];\n  return trainInfo != null || undefined ? trainInfo: trainsInfo.wip;\n}\n\nfunction keyGen(){\n  let keyDescription = \"Train Descriptions:\\n\";\n  let trainsList = Object.keys(trainsInfo);\n  \n  for (train in trainsList){\n    var d = trainsInfo[trainsList[train]];\n    keyDescription += `\\n- ${d.emoji} = ${capitalizeFirstLetter(d.name)} Train -> ${d.description}`\n  }\n  return keyDescription + \"\\n\\n\";\n}\n\nfor (chunk in chunks){\n    var counter = \"\";\n    var markdown = \"\";\n    var list = chunks[chunk].list;\n    var count = chunks[chunk].count;\n    var chunkServerName = chunks[chunk].serverName;\n    \n    for (lst in list){\n        var data = list[lst];\n        var chartName = data.chartName;\n        var chartDescription = data.chartDecription;\n        var chartTrain = data.chartTrain;\n        var chartIcon = data.icon;\n        var instancesCount = data.instances;\n        var iconSize = getConfigData.image_size;\n        var serverName = data.serverName;\n        var serverIcon = data.serverIcon;\n        var serverDescription = data.serverDescription;\n        var isNew = data.isNew;\n\n        if(instancesCount != 1){\n            chartName += `<sup>x${instancesCount}</sup>`;//` (x${instancesCount})`;\n        }\n        chartName += !isNew ? \"\": ` ${getConfigData.new_badge_emoji}`;\n        \n        markdown += `\\n| <img src=\"${chartIcon}\" width=\"${iconSize.width}\" height=\"${iconSize.height}\" /> | **${chartName}** | ${getTrainInfo(chartTrain).emoji} | ${chartDescription} |`;\n        \n    }\n    var serverSeparator = `## **${serverName}**: ${serverDescription}\\n\\n`;\n    counter = `\\n\\n Installed Services Count: **${count}**`;\n    markDownData.push(serverSeparator + tableFormat + markdown + counter + \"\\n___\\n\")\n}\n\nreturn {markdown: keyGen() + markDownData.join(\"\\n\")};"
+      },
+      "id": "35dbc811-1f0a-4743-86a8-76b65c41471b",
+      "name": "markdown-generator",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        380,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "file",
+        "operation": "get",
+        "owner": "={{$node[\"get-config-data\"].json[\"repo\"][\"repo_owner\"]}}",
+        "repository": "={{$node[\"get-config-data\"].json[\"repo\"][\"repo_name\"]}}",
+        "filePath": "={{$node[\"get-config-data\"].json[\"repo\"][\"app_list\"]}}",
+        "additionalParameters": {}
+      },
+      "id": "014ed770-4edc-4275-af34-ddf62587550a",
+      "name": "git-docs-get",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [
+        540,
+        -240
+      ],
+      "credentials": {
+        "githubOAuth2Api": {
+          "id": "2",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "setAllData": false,
+        "options": {}
+      },
+      "id": "7a058996-084a-463d-939b-3ced4e167e75",
+      "name": "Move Binary Data",
+      "type": "n8n-nodes-base.moveBinaryData",
+      "typeVersion": 1,
+      "position": [
+        700,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "var lstSeparator1 = `Train Descriptions:`;\n\nvar gitMarkDown = items[0].json.data;\nvar markDownGen = items[0].json.markdown;\nvar d = gitMarkDown.split(lstSeparator1)[0];\n\nvar newDoc = d + markDownGen;\n\nreturn {new: newDoc, old: gitMarkDown, isNew: newDoc !== gitMarkDown};"
+      },
+      "id": "742d9588-d2a1-4065-b21f-f7eb488da6d4",
+      "name": "mux-markdown",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        860,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 6
+            }
+          ]
+        }
+      },
+      "id": "330507c8-91a1-4df2-ad2e-2c178b1e317a",
+      "name": "Cron",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -460
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json[\"url\"] }}{{$node[\"get-config-data\"].json[\"api\"][\"base\"]}}{{$node[\"get-config-data\"].json[\"api\"][\"charts_release\"]}}",
+        "options": {
+          "fullResponse": false,
+          "splitIntoItems": true
+        },
+        "headerParametersUi": {
+          "parameter": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{$json[\"token\"]}}"
+            }
+          ]
+        }
+      },
+      "id": "ab1db81f-051e-49e1-8c71-994e2a43f954",
+      "name": "scale-installed-charts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        40,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "var splitInBatches = $node[\"SplitInBatches-Advanced\"].json;\nvar getConfigData = $node[\"get-config-data\"].json;\n\nvar catalogs = getConfigData.catalogs;\nvar list = [];\n\nfunction containsAny(str, substrings) {\n    for (var i = 0; i != substrings.length; i++) {\n       var substring = substrings[i];\n       if (str.indexOf(substring) != - 1) {\n         return substring;\n       }\n    }\n    return null; \n}\n\nfunction isNew(date){\n  var maxDays = getConfigData.max_days_new_badge;\n  let d1 = new Date(date);\n  return +new Date() < d1.setDate(d1.getDate() + (maxDays||0))\n}\n\nfor(itm in items){\n  let d = items[itm].json;\n  let data = d.chart_metadata;\n  let train = d.catalog_train;\n  let catalog = d.catalog;\n  let info = d.info;\n  let catalogFilter = catalogs.includes(catalog.toLowerCase());\n  const instancesCount = items.filter(item => item.json.chart_metadata.name === data.name).length;\n  if(catalogFilter)\n  list.push({\n    icon: data.icon,\n    appName: items[itm].json.name,\n    chartName: data.name, \n    chartTrain: train,\n    isNew: isNew(info.first_deployed),\n    instances: instancesCount,\n    serverName: splitInBatches.name,\n    serverIcon: splitInBatches.icon,\n    serverDescription: splitInBatches.description,\n    chartDecription: data.description.trim()\n    });\n}\nreturn {serverName: splitInBatches.name, serverDescription: splitInBatches.description, jsonFile: splitInBatches.json_file, list: list};"
+      },
+      "id": "76ad8cf1-298e-432a-b575-b017a62e735b",
+      "name": "mux-chart-data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        260,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "var getConfigData = $node[\"get-config-data\"].json;\nvar fList = getConfigData.filter_list;\nvar filteredList = [];\n\nfunction containsAny(str, substrings) {\n    for (var i = 0; i != substrings.length; i++) {\n       var substring = substrings[i];\n       if (str.indexOf(substring) != - 1) {\n         return substring;\n       }\n    }\n    return null; \n}\n\nvar serverChunks = [];\n\nfor(server in items){\n  var data = items[server].json;\n  var list = data.list;\n  var jsonFile = data.jsonFile;\n  var serverDescription = data.serverDescription\n\n  if(fList.length != 0){\n  filteredList = list.filter(chart => !containsAny(chart.appName, fList));\n  } else {\n    filteredList = list;\n    }\n  \n  var sort_app_list = filteredList.sort(function (a, b) {\n    return a.serverName.localeCompare(b.serverName) || a.chartName.localeCompare(b.chartName);\n});\n  var removeDupeList = sort_app_list.filter((value, index, self) =>\n  index === self.findIndex((t) => (\n    t.chartName === value.chartName\n  )));\n\n  var countChunkList = removeDupeList.reduce((accumulator, object) => {\n  return accumulator + object.instances;\n}, 0);\n  serverChunks.push({serverName: data.serverName, serverDescription: serverDescription, count: countChunkList, jsonFile: jsonFile, list: removeDupeList})// sort_app_list\n}\nvar sortServerChunks = serverChunks.sort(function (a, b) {\n    return a.serverName.localeCompare(b.serverName);\n});\nreturn {chunks: [...sortServerChunks]};"
+      },
+      "id": "2d507caa-49df-4ca5-8dd1-dcd8403f1596",
+      "name": "filter-sort-list",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        160,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "08b045da-eb71-4386-bfcd-a773ba5e3c6b",
+      "name": "split-git-files",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "file",
+        "operation": "edit",
+        "owner": "={{$node[\"get-config-data\"].json[\"repo\"][\"repo_owner\"]}}",
+        "repository": "={{$node[\"get-config-data\"].json[\"repo\"][\"repo_name\"]}}",
+        "filePath": "={{ $json[\"gitFile\"] }}",
+        "fileContent": "={{ $json[\"data\"] }}",
+        "commitMessage": "={{$node[\"get-config-data\"].json[\"repo\"][\"commit_msg\"]}}"
+      },
+      "id": "b5e715a5-d1e5-419e-96e4-c50867954d9b",
+      "name": "git-docs-update",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [
+        820,
+        0
+      ],
+      "credentials": {
+        "githubOAuth2Api": {
+          "id": "2",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "var getConfigData = $node[\"get-config-data\"].json;\nvar app_list = getConfigData.repo.app_list;\nvar chunks = $node[\"filter-sort-list\"].json.chunks;\nvar markdownFile = $node[\"IF\"].json.new;\nvar list = [];\n\nfunction getTrain(train){\n  let trains = getConfigData.repo.trains_info;\n  let chart_train = trains[train];\n  return chart_train != null || chart_train != undefined ? chart_train: trains[\"wip\"];\n}\n\nfor(chunk in chunks){\n  let chunkServer = chunks[chunk];\n  let serverList = chunkServer.list;\n  let apps = [];\n  \n  for(lst in serverList){\n    let data = serverList[lst];\n    let icon = data.icon;\n    let name = data.chartName;\n    let train = getTrain(data.chartTrain).emoji;\n    let description = data.chartDecription;\n    let instances = data.instances;\n    let isNew = data.isNew;\n    \n    name += !isNew ? \"\": ` ${getConfigData.new_badge_emoji}`\n\n    apps.push({icon: icon, name: name, train: train, description: description, instances: instances})\n  }\n}\nlist.push({gitFile: getConfigData.repo.app_list, data: markdownFile})\nreturn list;"
+      },
+      "id": "a3c66998-6438-4074-a92c-74f640b7eef8",
+      "name": "save-app-list",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1160,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": true,
+              "value2": "={{ $json[\"isNew\"] }}"
+            }
+          ]
+        }
+      },
+      "id": "4bf6f145-f5ce-4c0c-b843-7737a973b838",
+      "name": "IF",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        -240
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "get-config-data": {
+      "main": [
+        [
+          {
+            "node": "Item Lists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SplitInBatches-Advanced": {
+      "main": [
+        [
+          {
+            "node": "filter-sort-list",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "scale-installed-charts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Item Lists": {
+      "main": [
+        [
+          {
+            "node": "SplitInBatches-Advanced",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "markdown-generator": {
+      "main": [
+        [
+          {
+            "node": "git-docs-get",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "git-docs-get": {
+      "main": [
+        [
+          {
+            "node": "Move Binary Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Binary Data": {
+      "main": [
+        [
+          {
+            "node": "mux-markdown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mux-markdown": {
+      "main": [
+        [
+          {
+            "node": "IF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cron": {
+      "main": [
+        [
+          {
+            "node": "get-config-data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "scale-installed-charts": {
+      "main": [
+        [
+          {
+            "node": "mux-chart-data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "mux-chart-data": {
+      "main": [
+        [
+          {
+            "node": "SplitInBatches-Advanced",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "filter-sort-list": {
+      "main": [
+        [
+          {
+            "node": "markdown-generator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "split-git-files": {
+      "main": [
+        [
+          {
+            "node": "git-docs-update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "git-docs-update": {
+      "main": [
+        [
+          {
+            "node": "split-git-files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "save-app-list": {
+      "main": [
+        [
+          {
+            "node": "split-git-files",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF": {
+      "main": [
+        [
+          {
+            "node": "save-app-list",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "versionId": "5ee2e7e3-1ca0-4768-a15f-f426242458bf",
+  "id": "123",
+  "meta": {
+    "instanceId": "a5179d2f1c5e8d9aa759e6ca9eb44d9357b74d790dc46fb17fbfccee5022eeb8"
+  },
+  "tags": []
+}
